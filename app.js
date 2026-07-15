@@ -19,18 +19,20 @@ const REFMAP = {};
 REF.forEach(r => { REFMAP[r[0]] = { aware: r[1], ddd: r[2] }; });
 
 /* The locked logic. Core domains: any "No" makes the order Inappropriate.
-   Cultures and a single combined supporting-labs domain (procalcitonin, CRP,
-   CBC white-cell/neutrophil picture, lactate where relevant) are core and gate
-   the verdict. The individual lab VALUES are captured separately as optional
-   documentation; the "labs" domain is the reviewer's holistic Yes/No/N-A call.
-   Score a lab domain N/A when no supporting labs were obtained. */
+   Cultures are core and gate the verdict. The combined supporting-labs domain
+   (procalcitonin, CRP, CBC white-cell/neutrophil picture, lactate where
+   relevant) is a MINOR domain: biomarkers are adjuncts, so a "No" flags the
+   order for optimisation rather than failing it outright. The individual lab
+   VALUES are captured separately as optional documentation; the "labs" domain
+   is the reviewer's holistic Yes/No/N-A call. Score it N/A when no supporting
+   labs were obtained. */
 const CRIT = [
   { key: 'indication', n: 1,  label: 'Indication documented',                            std: 'CDC Core Elements; ASHP',                              core: true,  short: 'indication' },
   { key: 'concordant', n: 2,  label: 'Guideline-concordant agent',                       std: 'IDSA/ATS/ACG/WHO + antibiogram',                       core: true,  short: 'agent' },
   { key: 'culture',    n: 3,  label: 'Cultures sent before therapy',                     std: 'IDSA-SHEA — sent before first dose',                   core: true,  short: 'cultures' },
-  { key: 'labs',       n: 4,  label: 'Supporting labs consistent with infection',        std: 'PCT / CRP / CBC-neutrophils / lactate · N/A if none',  core: true,  short: 'supporting labs' },
-  { key: 'dose',       n: 5,  label: 'Dose correct',                                     std: 'Label; renal/hepatic adjust',                          core: true,  short: 'dose' },
-  { key: 'allergy',    n: 6,  label: 'Allergy reconciled',                               std: 'Allergy reconciliation',                               core: true,  short: 'allergy' },
+  { key: 'dose',       n: 4,  label: 'Dose correct',                                     std: 'Label; renal/hepatic adjust',                          core: true,  short: 'dose' },
+  { key: 'allergy',    n: 5,  label: 'Allergy reconciled',                               std: 'Allergy reconciliation',                               core: true,  short: 'allergy' },
+  { key: 'labs',       n: 6,  label: 'Supporting labs consistent with infection',        std: 'PCT / CRP / CBC-neutrophils / lactate · N/A if none',  core: false, short: 'supporting labs' },
   { key: 'route',      n: 7,  label: 'Route appropriate / IV→PO',                        std: 'IDSA-SHEA IV→PO',                                      core: false, short: 'IV→PO/route' },
   { key: 'deesc',      n: 8,  label: 'De-escalation at 48–72h',                          std: 'Antibiotic time-out',                                  core: false, short: 'de-escalation' },
   { key: 'duration',   n: 9,  label: 'Duration within range',                            std: 'Syndrome guideline',                                   core: false, short: 'duration' },
@@ -285,7 +287,7 @@ function reviewHtml() {
         '<div class="field"><label>Severity</label><select class="input" data-field="sev">' + sevOpts + '</select></div>' +
       '</div>' +
 
-      '<div class="stewardship-head">Supporting labs <span style="font-weight:400;opacity:.6;font-size:12px">optional values — they document the &ldquo;supporting labs&rdquo; core domain below</span></div>' +
+      '<div class="stewardship-head">Supporting labs <span style="font-weight:400;opacity:.6;font-size:12px">optional values — they document the &ldquo;supporting labs&rdquo; minor domain below</span></div>' +
       '<div class="stewardship-grid">' + labInputsHtml(f) + '</div>' +
 
       '<div class="tier-head"><span class="tag tag-core">CORE</span><b>Core domains — any &ldquo;No&rdquo; makes the order Inappropriate</b></div>' +
@@ -337,7 +339,7 @@ function logicHtml() {
     '<summary>' + ICONS.chevron + ' How the scoring works — the locked logic</summary>' +
     '<div class="logic-body">' +
       '<p>Each order is scored <b>Yes / No / N/A</b> against eleven domains, each tied to a published standard. Because the standard is pre-agreed, a &ldquo;No&rdquo; is a statement about guideline concordance, not about the prescriber — which keeps the data defensible and the pharmacist–physician conversation collaborative.</p>' +
-      '<p>Cultures and a single combined <b>supporting-labs</b> domain — procalcitonin, CRP, the CBC white-cell / neutrophil picture, and lactate where relevant — are core domains. Record the individual values in the <b>Supporting labs</b> fields; the domain itself is your holistic Yes/No/N-A call on whether the labs, <i>on balance</i>, support a bacterial infection. Biomarkers are decision-support <i>adjuncts</i>: score <b>N/A</b> when none were obtained, and never let a single normal marker override strong clinical suspicion — flag &ldquo;No&rdquo; only when the overall lab picture argues against bacterial infection.</p>' +
+      '<p>Cultures are a core domain. The single combined <b>supporting-labs</b> domain — procalcitonin, CRP, the CBC white-cell / neutrophil picture, and lactate where relevant — is a <b>minor</b> domain: biomarkers are decision-support <i>adjuncts</i>, so an unsupportive lab picture flags the order for optimisation rather than failing it outright. Record the individual values in the <b>Supporting labs</b> fields; the domain itself is your holistic Yes/No/N-A call on whether the labs, <i>on balance</i>, support a bacterial infection. Score <b>N/A</b> when none were obtained, and never let a single normal marker override strong clinical suspicion — flag &ldquo;No&rdquo; only when the overall lab picture argues against bacterial infection.</p>' +
       '<table class="table"><tr><th>#</th><th>Domain</th><th>Tier</th><th>Reference</th></tr>' + rows + '</table>' +
       '<p class="logic-mono">Verdict, evaluated top to bottom — first match wins:</p>' +
       '<table class="table" style="margin-bottom:14px">' +
