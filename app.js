@@ -63,11 +63,10 @@ const VCOLORS = {
 
 function verdict(e) {
   if (!e.agent) return '';
-  if (CORE_KEYS.some(k => !e[k]) || !e.safety) return 'Incomplete';
   if (e.safety === 'Yes') return 'Escalation / unsafe';
-  if (CORE_KEYS.some(k => e[k] === 'No')) return 'Inappropriate — review';
   const minorNo = MINOR_KEYS.filter(k => e[k] === 'No').length;
-  if (minorNo >= 3) return 'Inappropriate — review';
+  if (CORE_KEYS.some(k => e[k] === 'No') || minorNo >= 3) return 'Inappropriate — review';
+  if (CORE_KEYS.some(k => !e[k]) || !e.safety) return 'Incomplete';
   if (minorNo >= 1) return 'Appropriate with optimisation';
   return 'Appropriate';
 }
@@ -83,7 +82,11 @@ function whyFail(e, v) {
     const m = MINOR_CRIT.filter(c => e[c.key] === 'No').map(c => c.short);
     return 'Optimise: ' + m.join(', ') + '.';
   }
-  if (v === 'Appropriate') return 'Guideline-concordant — no action needed.';
+  if (v === 'Appropriate') {
+    const unscored = MINOR_KEYS.filter(k => !e[k]).length;
+    if (unscored) return 'Core domains met — ' + unscored + ' minor domain' + (unscored > 1 ? 's' : '') + ' not yet scored.';
+    return 'Guideline-concordant — no action needed.';
+  }
   return 'Score the core domains and safety flag.';
 }
 
@@ -241,10 +244,10 @@ function critRowHtml(c) {
   return '<div class="crit-row">' +
     '<div><span class="crit-num">' + c.n + '</span><span class="crit-label">' + escHtml(c.label) + '</span>' +
     '<small class="crit-std">' + escHtml(c.std) + '</small></div>' +
-    '<div class="seg3">' +
-      '<button type="button" data-action="seg" data-key="' + c.key + '" data-val="Yes">Yes</button>' +
-      '<button type="button" data-action="seg" data-key="' + c.key + '" data-val="No">No</button>' +
-      '<button type="button" data-action="seg" data-key="' + c.key + '" data-val="N/A">N/A</button>' +
+    '<div class="seg3" role="group" aria-label="' + escHtml(c.label) + '">' +
+      '<button type="button" data-action="seg" data-key="' + c.key + '" data-val="Yes" aria-pressed="false">Yes</button>' +
+      '<button type="button" data-action="seg" data-key="' + c.key + '" data-val="No" aria-pressed="false">No</button>' +
+      '<button type="button" data-action="seg" data-key="' + c.key + '" data-val="N/A" aria-pressed="false">N/A</button>' +
     '</div></div>';
 }
 
@@ -293,9 +296,9 @@ function reviewHtml() {
 
       '<div class="safety-box">' +
         '<div class="safety-copy"><b>Critical safety breach?</b><small>allergy mismatch · major interaction · unapproved Reserve agent</small></div>' +
-        '<div class="seg3 lg">' +
-          '<button type="button" data-action="seg" data-key="safety" data-val="No">No</button>' +
-          '<button type="button" data-action="seg" data-key="safety" data-val="Yes">Yes</button>' +
+        '<div class="seg3 lg" role="group" aria-label="Critical safety breach">' +
+          '<button type="button" data-action="seg" data-key="safety" data-val="No" aria-pressed="false">No</button>' +
+          '<button type="button" data-action="seg" data-key="safety" data-val="Yes" aria-pressed="false">Yes</button>' +
         '</div>' +
       '</div>' +
 
@@ -342,8 +345,8 @@ function logicHtml() {
         '<tr><td>Escalation / unsafe</td><td>Critical safety breach flagged</td></tr>' +
         '<tr><td>Inappropriate — review</td><td>Any core domain = No, or ≥3 minor domains = No</td></tr>' +
         '<tr><td>Appropriate with optimisation</td><td>All core Yes/N-A, and 1–2 minor = No</td></tr>' +
-        '<tr><td>Appropriate</td><td>All applicable domains = Yes</td></tr>' +
-        '<tr><td>Incomplete</td><td>A core domain or the safety flag is blank</td></tr>' +
+        '<tr><td>Appropriate</td><td>All core Yes/N-A and no minor = No (unscored minors are flagged on the verdict card)</td></tr>' +
+        '<tr><td>Incomplete</td><td>A core domain or the safety flag is blank — a definite core &ldquo;No&rdquo; or safety breach is decisive even if other domains are still blank</td></tr>' +
       '</table>' +
       '<p style="font-size:12.5px;opacity:.6;margin:0">Criteria synthesised from CDC Core Elements, IDSA/SHEA, ATS/IDSA CAP, IDSA cUTI, ACG acute pancreatitis, WHO AWaRe, and procalcitonin-guided stewardship literature. Adapt the agent list and concordance rules to your own formulary and antibiogram.</p>' +
     '</div>' +
@@ -358,6 +361,7 @@ function paintSegs() {
     btn.classList.toggle('sel-yes', sel && btn.dataset.val === 'Yes');
     btn.classList.toggle('sel-no', sel && btn.dataset.val === 'No');
     btn.classList.toggle('sel-na', sel && btn.dataset.val === 'N/A');
+    btn.setAttribute('aria-pressed', sel ? 'true' : 'false');
   });
 }
 
@@ -439,13 +443,13 @@ function renderRegister() {
   } else {
     const rows = filtered.slice().reverse().map(e => {
       const evc = VCOLORS[e.verdict] || VCOLORS['Incomplete'];
-      return '<tr data-action="row-open" data-id="' + escHtml(e.id) + '">' +
+      return '<tr data-action="row-open" data-id="' + escHtml(e.id) + '" tabindex="0" aria-label="Open details for ' + escHtml(e.agent) + (e.pid ? ', ' + escHtml(e.pid) : '') + '">' +
         '<td>' + dash(e.date) + '</td><td>' + dash(e.pid) + '</td><td>' + dash(e.ward) + '</td>' +
         '<td>' + escHtml(e.agent) + '</td><td><span class="tag ' + awareClassFor(e.aware) + '">' + dash(e.aware) + '</span></td>' +
         '<td>' + dash(e.synd) + '</td>' +
         '<td><span class="tag" style="background:' + evc.bg + ';color:' + evc.color + ';font-weight:700">' + dash(e.verdict) + '</span></td>' +
         '<td>' + dash(e.dot) + '</td><td>' + dash(e.ddd) + '</td>' +
-        '<td><button type="button" class="row-del" data-action="row-del" data-id="' + escHtml(e.id) + '" title="Delete">' + ICONS.trash + '</button></td>' +
+        '<td><button type="button" class="row-del" data-action="row-del" data-id="' + escHtml(e.id) + '" title="Delete" aria-label="Delete entry ' + escHtml(e.pid || e.agent) + '">' + ICONS.trash + '</button></td>' +
       '</tr>';
     }).join('');
     body = '<div class="register-table-wrap"><table class="table register-table">' +
@@ -477,9 +481,9 @@ function computeStats() {
     n, nApp, nOpt, nIna, nEsc, nInc, scored,
     acc: awc('Access'), wat: awc('Watch'), res: awc('Reserve'),
     appStrict: pct(nApp, scored), appIncl: pct(nApp + nOpt, scored), accPct: pct(awc('Access'), n),
-    deRate: pct(yesc('deDone'), yesc('deElig')),
-    ivRate: pct(yesc('ivDone'), yesc('ivElig')),
-    intRate: pct(entries.filter(e => e.intAcc === 'Yes').length, yesc('intMade')),
+    deRate: pct(entries.filter(e => e.deElig === 'Yes' && e.deDone === 'Yes').length, yesc('deElig')),
+    ivRate: pct(entries.filter(e => e.ivElig === 'Yes' && e.ivDone === 'Yes').length, yesc('ivElig')),
+    intRate: pct(entries.filter(e => e.intMade === 'Yes' && e.intAcc === 'Yes').length, yesc('intMade')),
     dot1000: ptd > 0 ? (totDot / ptd * 1000) : null,
     ddd100: bdd > 0 ? (totDdd / bdd * 100) : null
   };
@@ -514,7 +518,8 @@ function barsHtml(data, n) {
     const pctOfAll = n > 0 ? Math.round(d.count / n * 1000) / 10 : 0;
     const tip = d.count + ' order' + (d.count === 1 ? '' : 's') + ' · ' + pctOfAll + '%';
     return '<div class="bar-row' + (d.count > 0 ? ' has-tip' : '') + '">' +
-      '<div class="bar-grid" data-action="bar" data-kind="' + d.kind + '" data-value="' + escHtml(d.value) + '" data-count="' + d.count + '">' +
+      '<div class="bar-grid" data-action="bar" data-kind="' + d.kind + '" data-value="' + escHtml(d.value) + '" data-count="' + d.count + '"' +
+        (d.count > 0 ? ' role="button" tabindex="0" aria-label="Filter register by ' + escHtml(d.label) + ' — ' + tip + '"' : '') + '>' +
         '<span>' + escHtml(d.label) + '</span>' +
         '<div class="bar-track"><div class="bar-fill" style="width:' + (d.count / max * 100) + '%;background:' + d.color + '"></div></div>' +
         '<span class="bar-count">' + d.count + '</span>' +
@@ -554,10 +559,18 @@ function dashHtml() {
 
 /* ═══════════════ dialogs ═══════════════ */
 
+let dialogReturnFocus = null;
+
 function renderDialog() {
   const root = document.getElementById('dialog-root');
   const d = state.dialog;
-  if (!d) { root.innerHTML = ''; return; }
+  if (!d) {
+    root.innerHTML = '';
+    if (dialogReturnFocus && document.contains(dialogReturnFocus)) dialogReturnFocus.focus();
+    dialogReturnFocus = null;
+    return;
+  }
+  dialogReturnFocus = document.activeElement;
   let inner = '';
 
   if (d.type === 'detail') {
@@ -565,7 +578,7 @@ function renderDialog() {
     const evc = VCOLORS[e.verdict] || VCOLORS['Incomplete'];
     const labVals = LAB_FIELDS.map(l => l.label + ' ' + dash(e[l.key])).join(' · ');
     inner =
-      '<div class="dialog-title">' + escHtml(e.agent) + '</div>' +
+      '<div class="dialog-title" id="dialog-title">' + escHtml(e.agent) + '</div>' +
       '<div class="dialog-body">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
           '<span class="tag" style="background:' + evc.bg + ';color:' + evc.color + ';font-weight:700">' + dash(e.verdict) + '</span>' +
@@ -611,8 +624,9 @@ function renderDialog() {
 
   root.innerHTML =
     '<div class="dialog-backdrop" data-action="dialog-close">' +
-      '<div class="dialog elev-lg" data-action="noop">' + inner + '</div>' +
+      '<div class="dialog elev-lg" data-action="noop" role="dialog" aria-modal="true" aria-labelledby="dialog-title" tabindex="-1">' + inner + '</div>' +
     '</div>';
+  root.querySelector('.dialog').focus();
 }
 
 /* ═══════════════ consent banner + storage tag ═══════════════ */
@@ -695,7 +709,11 @@ function loadExamples() {
          pctVal: '8.0', crpVal: '220', wbcVal: '19.0', lactateVal: '3.4' })
   ];
   state.entries = state.entries.concat(ex);
-  state.dash = Object.assign({}, state.dash, { ptdays: 30, beddays: 30 });
+  // suggest denominators for the demo, but never overwrite values the user typed
+  state.dash = Object.assign({}, state.dash, {
+    ptdays: state.dash.ptdays || 30,
+    beddays: state.dash.beddays || 30
+  });
   state.view = 'dash';
   persist();
   paintTabs();
@@ -705,7 +723,13 @@ function loadExamples() {
 /* — CSV — */
 
 function buildCSV(entries) {
-  const cell = v => { v = (v == null ? '' : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const cell = v => {
+    v = (v == null ? '' : String(v));
+    // neutralise spreadsheet formula injection (=, +, -, @, tab, CR at cell start);
+    // the leading apostrophe is stripped again on import so data round-trips
+    if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  };
   const header = EXPORT_FIELDS.map(f => f[1]).concat(DERIVED_FIELDS.map(f => f[1]));
   const lines = [header.map(cell).join(',')];
   entries.forEach(e => {
@@ -758,29 +782,42 @@ function importCSVFile(file) {
   rd.onload = () => {
     try {
       const rows = parseCSV(rd.result);
+      if (!rows.length) { alert('That file appears to be empty.'); return; }
       const hdr = rows.shift().map(h => (IMPORT_MAP[String(h).trim().toLowerCase()] || null));
+      if (!hdr.some(k => k)) { alert('No recognisable columns found. Make sure the CSV was exported from DebugRx.'); return; }
       const add = rows.map(r => {
         const o = {};
-        hdr.forEach((key, i) => { if (key) o[key] = r[i] == null ? '' : r[i]; });
+        hdr.forEach((key, i) => {
+          if (!key) return;
+          let v = r[i] == null ? '' : r[i];
+          if (/^'[=+\-@\t\r]/.test(v)) v = v.slice(1); // undo export's formula-injection guard
+          o[key] = v;
+        });
         CRIT.forEach(c => { if (o[c.key] == null) o[c.key] = ''; });
         LAB_FIELDS.forEach(l => { if (o[l.key] == null) o[l.key] = ''; });
         ['dot', 'doseG', 'ddd'].forEach(k => {
           o[k] = (o[k] === '' || o[k] == null) ? '' : parseFloat(o[k]);
           if (isNaN(o[k])) o[k] = '';
         });
-        if (!o.aware && REFMAP[o.agent]) o.aware = REFMAP[o.agent].aware;
-        if (!o.verdict) o.verdict = verdict(o);
+        // recompute everything derivable, so rows edited in a spreadsheet
+        // can never carry a stale verdict, AWaRe class or DDD into the KPIs
+        if (REFMAP[o.agent]) o.aware = REFMAP[o.agent].aware;
+        const ddd = calcDDD(o.agent, o.doseG);
+        if (ddd !== '') o.ddd = ddd;
+        o.verdict = verdict(o);
         o.id = newId();
         return o;
       });
+      if (!add.length) { alert('No data rows found in that CSV — only a header.'); return; }
       state.entries = state.entries.concat(add);
       persist();
       renderMain();
-      alert('Imported ' + add.length + ' rows.');
+      alert('Imported ' + add.length + ' row' + (add.length > 1 ? 's' : '') + '. Verdicts, AWaRe classes and DDDs were recomputed from the scored domains.');
     } catch (err) {
       alert('Could not read that CSV. Make sure it was exported from DebugRx.');
     }
   };
+  rd.onerror = () => alert('Could not read that file — it may be locked or unreadable.');
   rd.readAsText(file);
 }
 
@@ -874,7 +911,27 @@ document.getElementById('file-input').addEventListener('change', ev => {
 });
 
 document.addEventListener('keydown', ev => {
-  if (ev.key === 'Escape' && state.dialog) { state.dialog = null; renderDialog(); }
+  if (ev.key === 'Escape' && state.dialog) { state.dialog = null; renderDialog(); return; }
+
+  // keep Tab inside an open dialog
+  if (ev.key === 'Tab' && state.dialog) {
+    const focusables = document.querySelectorAll('.dialog button, .dialog a[href], .dialog input, .dialog select, .dialog textarea');
+    if (focusables.length) {
+      const first = focusables[0], last = focusables[focusables.length - 1];
+      if (ev.shiftKey && (document.activeElement === first || document.activeElement.classList.contains('dialog'))) {
+        ev.preventDefault(); last.focus();
+      } else if (!ev.shiftKey && document.activeElement === last) {
+        ev.preventDefault(); first.focus();
+      }
+    }
+    return;
+  }
+
+  // Enter/Space activate keyboard-focusable rows and chart bars
+  if (ev.key === 'Enter' || ev.key === ' ') {
+    const t = ev.target.closest && ev.target.closest('[data-action="row-open"], [data-action="bar"]');
+    if (t && t === ev.target) { ev.preventDefault(); t.click(); }
+  }
 });
 
 /* ═══════════════ boot ═══════════════ */
